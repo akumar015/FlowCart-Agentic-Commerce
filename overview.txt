@@ -1,0 +1,33 @@
+PROJECT BRIEF: CONVERSATIONAL IN-APP CHECKOUT
+
+1. The Core Problem Statement
+The e-commerce industry currently suffers from a "transactional divide." While platforms use AI to power highly intelligent Conversational Search (e.g., suggesting a black boxy-fit t-shirt or finding an alternative whey protein), the AI's capability stops at the "Add to Cart" button. The user is then forced out of the conversational flow and into a traditional, multi-step graphical checkout funnel (selecting addresses, choosing payment methods, waiting for OTPs). The problem is that AI acts as the sales representative, but is not trusted to be the cashier.
+
+2. The Hackathon Objective (Track 01)
+Track 01 challenges us to build Agentic Commerce. The goal is to cross the transactional divide by allowing the AI to actually own the money movement. However, because LLMs are prone to hallucination, the core engineering challenge is not just conversational fluency, but Trust and Safety. The solution must prove that an AI can move money in a way that is explainable, strictly bounded, explicitly gated, and gracefully handles failures without executing unauthorized charges.
+
+3. Our Chosen Direction: Conversational In-App Checkout
+We are building a Human-to-Agent (H2A) in-app checkout experience. Instead of the user navigating a complex app interface, the user chats with an autonomous sales agent.
+
+The Target Flow:
+* Context Aware: The AI recognizes the logged-in user, their past order history, and their predefined agent spending limits.
+* Discovery: The AI searches the catalog, suggests items, and handles "out-of-stock" pivots natively.
+* Cart Mutation: The AI builds and modifies the cart in the background based on natural language ("Add the Nakpro whey and remove the creatine").
+* Agentic Checkout: Instead of redirecting the user, the AI summarizes the cart, applies the delivery address, generates a Razorpay payment link natively in the chat, and waits for payment confirmation.
+
+4. Technical Architecture
+To achieve this securely, we have adopted a highly modular, state-machine-driven architecture:
+* The Frontend (app.py): A Streamlit chat interface acting as the visual shell.
+* The Brain (agent_graph.py): Powered by LangGraph and Gemini 3.1 Flash Lite. The graph is explicitly divided into two zones:
+  - Safe Zone: Harmless tools like searching the database or modifying the cart.
+  - Danger Zone (Payment Gate): A hardcoded node that intercepts any attempt by the AI to trigger a payment. It verifies the cart total against the user's allowed `spend_limit_per_tx` before allowing the Razorpay API to fire.
+* The Hands (agent_tools.py): The specific Python functions the LLM is permitted to call.
+* The Data Layer (/databases):
+  - inventory.db: The source of truth for all products, categories, variants, and stock counts.
+  - users.db: Manages user profiles, delivery addresses, dynamic agent spending limits, cart states, and historical orders.
+* The Payment Layer (razorpay_client.py & webhook_server.py): Generates test payment links and listens for asynchronous success callbacks via FastAPI.
+
+5. Hitting "The Bar" (Winning Criteria)
+* Explainable & Bounded: Before any payment link is generated, user_service.py intercepts the request and verifies the total against the user's `spend_limit_per_tx`. If a limit is exceeded, the system programmatically blocks the AI and forces a step-up authentication prompt.
+* Audit Trail: Every time the AI makes a decision (e.g., adding an item, hitting the payment gate), a record is written to the agent_audit_logs table. This proves the AI did not hallucinate the transaction.
+* Graceful Failure: Utilizing Razorpay Webhooks and the LangGraph state machine, if a test card is declined or an item goes out of stock mid-chat, the AI reads the error, apologizes in natural language, and asks how to proceed without crashing the app.
