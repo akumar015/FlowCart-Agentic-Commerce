@@ -1,6 +1,4 @@
 """
-chat_agent/razorpay_client.py
-
 Exposes three functions used by the payment_tools node in agent_graph.py:
   init_razorpay_client()       → razorpay.Client (cached singleton)
   create_payment_link(...)     → dict  with short_url, payment_link_id
@@ -75,50 +73,56 @@ def create_payment_link(
             error (str)          — Present only when success=False
     """
 
-    client=init_razorpay_client()
+    import time
 
-    # convert amount to smallest currency unit (razorpay works only in smallest currency unit)
+    client = init_razorpay_client()
+    amount_paise = int(round(amount_inr * 100))
 
-    amount_paise=int(round(amount_inr*100))
-
-    payload={
-        'amount': amount_paise,
-        'currency': 'INR',
-        'description': description,
-        'customer':{
-            'name': customer_name,
-            'email': customer_email,
-            'contact': customer_phone
+    payload = {
+        "amount":      amount_paise,
+        "currency":    "INR",
+        "description": description,
+        "customer": {
+            "name":    customer_name,
+            "email":   customer_email,
+            "contact": customer_phone,
         },
-        'notify':{
-            'sms': True,
-            'email': True
+        "notify": {
+            "sms":   True,
+            "email": True,
         },
-        'remainder_enable': True,
-        'callback_url': callback_url,
-        'callback_method': "get",
-        'notes':{
-            'order_number': order_number,
+        "reminder_enable": True,
+        "callback_url": callback_url,
+        "notes": {
+            "order_number": order_number,
         },
     }
 
-    try: 
-        response=client.payment_link.create(payload) #type: ignore[attr-defined]
-        return{
-            'success': True,
-            'payment_link_id': response['id'],
-            'short_url': response['short_url'],
-            'amount_inr': amount_inr,
-            'amount_paise': amount_paise,
-            'order_number': order_number,
-        }
+    last_error = ""
+    for attempt in range(2):          # 1 try + 1 retry on rate-limit
+        try:
+            response = client.payment_link.create(payload)  # type: ignore[attr-defined]
+            return {
+                "success":          True,
+                "payment_link_id":  response["id"],
+                "short_url":        response["short_url"],
+                "amount_inr":       amount_inr,
+                "amount_paise":     amount_paise,
+                "order_number":     order_number,
+            }
+        except Exception as e:
+            last_error = str(e)
+            # Razorpay test-mode rate limit — wait and retry once
+            if "too many requests" in last_error.lower() and attempt == 0:
+                time.sleep(4)
+                continue
+            break   # non-rate-limit error → don't retry
 
-    except Exception as e:
-        return{
-            'success': False,
-            'error': str(e),
-            'order_number': order_number
-        }
+    return {
+        "success":      False,
+        "error":        last_error,
+        "order_number": order_number,
+    }
 
 # verify webhook signature 
 def verify_webhook_signature(
