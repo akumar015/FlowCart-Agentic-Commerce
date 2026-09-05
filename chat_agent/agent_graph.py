@@ -170,32 +170,49 @@ def payment_gate_node(state: AgentState)-> dict:
     )
 
     if allowed:
-        # store gate result in a ToolMessage so the graph can route to payment_tools
-        gate_msg=ToolMessage(
+        # Approved: return a ToolMessage so gate_decision can route to payment_tools.
+        gate_msg = ToolMessage(
             content=json.dumps({
-                'gate': 'approved',
-                'grand_total': grand_total,
-                'reason': reason,
+                "gate": "approved",
+                "grand_total": grand_total,
+                "reason": reason,
             }),
             tool_call_id=tool_call_id,
-            name='initiate_checkout',
+            name="initiate_checkout",
         )
+        return {"messages": [gate_msg]}
 
     else:
-        # inject rejection ToolMessage, agent will recieve and respond to the user
+        # Blocked: synthesise the rejection response directly here.
+        # We return BOTH a ToolMessage (to close the open tool call in history)
+        # and an AIMessage (the actual user-facing reply).
+        # gate_decision will then route to END — no LLM call needed.
+        # This avoids the Gemini "model prefilling" error that occurs when the
+        # LLM is invoked with an AIMessage as the final message in history.
+        spend_limit = check.get("spend_limit", 0.0) or 0.0
 
-        gate_msg=ToolMessage(
+        gate_msg = ToolMessage(
             content=json.dumps({
-                'gate': "blocked",
-                'reason': reason,
+                "gate": "blocked",
+                "reason": reason,
                 "grand_total": grand_total,
-                "spend_limit": check.get("spend_limit"),
+                "spend_limit": spend_limit,
             }),
             tool_call_id=tool_call_id,
-            name= 'initiate_checkout',
+            name="initiate_checkout",
         )
 
-    return{'messages': [gate_msg]}
+        rejection_msg = AIMessage(content=(
+            f"I can't proceed with checkout right now.\n\n"
+            f"Your cart total of **₹{grand_total:,.2f}** exceeds your "
+            f"per-transaction agent spend limit of **₹{spend_limit:,.2f}**.\n\n"
+            f"Here's what you can do:\n"
+            f"- Remove some items from your cart to bring the total under the limit, or\n"
+            f"- Contact support to request a higher spend limit.\n\n"
+            f"Would you like me to show what's in your cart so you can decide what to remove?"
+        ))
+
+        return {"messages": [gate_msg, rejection_msg]}
 
 # node 4: payment tools node
 def payment_tools_node(state: AgentState)-> dict:
@@ -317,26 +334,30 @@ def should_continue(state: AgentState) -> Literal["tools", "payment_gate", "__en
     return "tools"
 
 
-def gate_decision(state: AgentState) -> Literal["payment_tools", "agent"]:
+def gate_decision(state: AgentState) -> Literal["payment_tools", "__end__"]:
     """
     Routes the output of payment_gate_node.
-    Reads the gate result from the last ToolMessage.
-      - gate=approved → payment_tools
-      - gate=blocked  → agent  (agent sees the rejection ToolMessage and explains to user)
+    - gate=approved  → last msg is ToolMessage  → payment_tools
+    - gate=blocked   → last msg is AIMessage    → __end__  (response already synthesised)
     """
     last_msg = state["messages"][-1]
 
+    # Approved path: gate returned a single ToolMessage with gate=approved
     if isinstance(last_msg, ToolMessage):
         try:
-            content=last_msg.content
+            content = last_msg.content
             if isinstance(content, list):
-                content=json.dumps(content)
+                content = json.dumps(content)
             data = json.loads(content)
             if data.get("gate") == "approved":
                 return "payment_tools"
         except (json.JSONDecodeError, AttributeError):
             pass
-    return "agent"
+
+    # Blocked path: payment_gate_node already returned [ToolMessage, AIMessage].
+    # The rejection AIMessage is now the last message — go straight to END.
+    return "__end__"
+
 
 
 #----------------------------------------------------------------
@@ -389,11 +410,14 @@ def build_graph():
         gate_decision,
         {
             "payment_tools": "payment_tools",
-            "agent": "agent"
+            "__end__": END,          # blocked path — rejection already synthesised
         }
     )
 
-    graph.add_edge("payment_tools","agent")
+    # payment_tools already returns a complete AIMessage response.
+    # Routing back to agent would trigger Gemini's "model prefilling" error
+    # (LLM called with AIMessage as the last message). Go straight to END.
+    graph.add_edge("payment_tools", END)
 
     # memory (per thread checkpoint)
     memory=MemorySaver()
