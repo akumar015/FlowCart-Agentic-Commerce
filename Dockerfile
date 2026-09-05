@@ -12,6 +12,10 @@ RUN npm run build
 FROM python:3.11-slim
 WORKDIR /app
 
+# Ensure Python logs flush immediately and use UTF-8
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONIOENCODING=utf-8
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
@@ -30,9 +34,8 @@ COPY scripts ./scripts
 # Copy built frontend from Stage 1
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
-# Railway provides PORT dynamically at runtime
+# Default fallback port
 ENV PORT=8000
-EXPOSE 8000
 
-# Start Uvicorn bound to 0.0.0.0 and Railway's dynamic PORT
-CMD ["sh", "-c", "uvicorn api:app --host 0.0.0.0 --port ${PORT}"]
+# Start server via main.py which cleanly reads $PORT and binds to 0.0.0.0
+CMD ["python", "main.py"]
