@@ -5,6 +5,8 @@ import Drawer from '../components/Drawer';
 import MessageFeed from '../components/MessageFeed';
 import ChatInput from '../components/ChatInput';
 
+const API_BASE = import.meta.env.VITE_API_URL || '';
+
 export default function Chat() {
   const navigate = useNavigate();
 
@@ -41,7 +43,7 @@ export default function Chat() {
 
   // Fetch initial users list and inventory suggestions
   useEffect(() => {
-    fetch('http://localhost:8000/api/users')
+    fetch(`${API_BASE}/api/users`)
       .then((res) => res.json())
       .then((data) => {
         if (data.users && data.users.length > 0) {
@@ -51,7 +53,7 @@ export default function Chat() {
       })
       .catch((err) => console.error('API not reachable:', err));
 
-    fetch('http://localhost:8000/api/suggestions')
+    fetch(`${API_BASE}/api/suggestions`)
       .then((res) => res.json())
       .then((data) => {
         if (data.suggestions) {
@@ -71,7 +73,7 @@ export default function Chat() {
     setAuditLogs([]);
 
     // Fetch user profile
-    fetch(`http://localhost:8000/api/users/${selectedUserId}`)
+    fetch(`${API_BASE}/api/users/${selectedUserId}`)
       .then((res) => res.json())
       .then((data) => {
         setUserProfile(data.profile || {});
@@ -92,7 +94,7 @@ export default function Chat() {
 
   const fetchCart = async (sid = sessionId) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/cart/${sid}`);
+      const res = await fetch(`${API_BASE}/api/cart/${sid}`);
       const data = await res.json();
       if (data.cart) {
         setCart({
@@ -118,7 +120,7 @@ export default function Chat() {
     setIsLoading(true);
 
     try {
-      const res = await fetch('http://localhost:8000/api/chat', {
+      const res = await fetch(`${API_BASE}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -167,7 +169,7 @@ export default function Chat() {
   const handleUpsellAdd = async (item) => {
     setIsLoading(true);
     try {
-      const res = await fetch('http://localhost:8000/api/chat', {
+      const res = await fetch(`${API_BASE}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

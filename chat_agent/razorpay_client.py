@@ -53,7 +53,7 @@ def create_payment_link(
         customer_email: str,
         customer_phone: str,
         order_number: str,
-        callback_url: str="http://localhost:8000/webhook/razorpay"
+        callback_url: str = None,
 ) -> dict:
     """
     Create a Razorpay Payment Link in test mode and return the link details.
@@ -77,6 +77,9 @@ def create_payment_link(
     """
 
     import time
+
+    if not callback_url:
+        callback_url = os.getenv("RAZORPAY_CALLBACK_URL", "http://localhost:8000/webhook/razorpay").strip()
 
     client = init_razorpay_client()
     amount_paise = int(round(amount_inr * 100))
