@@ -80,20 +80,28 @@ def search_catalog(
     Use this tool FIRST whenever the user asks to find, browse, or filter
     products. Never fabricate product names or prices -- always call this tool.
 
+    Categories available:
+    - "Mobiles & Accessories" (Smartphones, chargers, cases)
+    - "Computers" (Gaming laptops, ultrabooks, MacBooks)
+    - "Electronics & Gadgets" (ANC headphones, earbuds, mice, keyboards, SSDs)
+    - "Clothing" (T-shirts, gym wear, hoodies, jeans)
+    - "Footwear" (Marathon running shoes, sneakers)
+
     Args:
-        query:      Free-text keyword(s) to search (e.g. "whey protein chocolate").
-        category:   Optional category filter (e.g. "protein", "shoes", "electronics").
+        query:      Short, focused keyword(s) to search (e.g. "gaming", "RTX 4050", "iPhone", "marathon", "5000 mAh").
+                    DO NOT pass long conversational phrases or questions here.
+        category:   Category filter (e.g. "Computers", "Mobiles & Accessories").
         max_price:  Optional upper price bound in INR.
         min_price:  Optional lower price bound in INR.
-        color:      Optional color filter (e.g. "black", "red").
-        size:       Optional size filter (e.g. "M", "10", "XL").
+        color:      Optional color filter.
+        size:       Optional size filter (e.g. "M", "10", "128GB", "512GB").
         limit:      Maximum number of results to return (default 8).
         session_id: The current chat session ID (used for audit logging).
         user_id:    The logged-in user's ID (used for audit logging).
 
     Returns:
         JSON string with a list of matching products, each including variants,
-        available colors/sizes, price, rating, and category.
+        technical specifications in description, price, rating, and category.
     """
     results = inventory_service.search_products(
         query=query,
