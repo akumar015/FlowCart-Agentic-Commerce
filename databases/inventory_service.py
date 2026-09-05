@@ -29,7 +29,7 @@ def search_products(query="", category=None, max_price=None, min_price=None, col
         fts_query = " ".join([f'"{term.strip()}*"' for term in query.split() if term.strip()])
         sql = """
             SELECT DISTINCT 
-                p.id, p.title, p.brand, c.name as category, p.description, 
+                p.id, p.title, p.brand, c.name as category, p.category_tree, p.description, 
                 p.base_price, p.rating, p.tags
             FROM products_fts fts
             JOIN products p ON fts.product_id = p.id
@@ -41,7 +41,7 @@ def search_products(query="", category=None, max_price=None, min_price=None, col
     else:
         sql = """
             SELECT DISTINCT 
-                p.id, p.title, p.brand, c.name as category, p.description, 
+                p.id, p.title, p.brand, c.name as category, p.category_tree, p.description, 
                 p.base_price, p.rating, p.tags
             FROM products p
             JOIN categories c ON p.category_id = c.id
@@ -50,8 +50,8 @@ def search_products(query="", category=None, max_price=None, min_price=None, col
         """
 
     if category:
-        sql += " AND (LOWER(c.name) LIKE ? OR LOWER(c.slug) LIKE ?)"
-        params.extend([f"%{category.lower()}%", f"%{category.lower()}%"])
+        sql += " AND (LOWER(c.name) LIKE ? OR LOWER(c.slug) LIKE ? OR LOWER(p.category_tree) LIKE ?)"
+        params.extend([f"%{category.lower()}%", f"%{category.lower()}%", f"%{category.lower()}%"])
 
     if max_price is not None:
         sql += " AND (v.price <= ? OR p.base_price <= ?)"
@@ -94,6 +94,7 @@ def search_products(query="", category=None, max_price=None, min_price=None, col
             "title": r["title"],
             "brand": r["brand"],
             "category": r["category"],
+            "category_tree": r["category_tree"],
             "description": r["description"],
             "base_price": r["base_price"],
             "rating": r["rating"],
@@ -124,7 +125,7 @@ def get_product_details(product_id_or_sku):
         product_id = int(product_id_or_sku)
 
     cursor.execute("""
-        SELECT p.id, p.title, p.brand, c.name as category, p.description, p.base_price, p.rating, p.tags
+        SELECT p.id, p.title, p.brand, c.name as category, p.category_tree, p.description, p.base_price, p.rating, p.tags
         FROM products p
         JOIN categories c ON p.category_id = c.id
         WHERE p.id = ?
@@ -149,6 +150,7 @@ def get_product_details(product_id_or_sku):
         "title": p_row["title"],
         "brand": p_row["brand"],
         "category": p_row["category"],
+        "category_tree": p_row["category_tree"],
         "description": p_row["description"],
         "base_price": p_row["base_price"],
         "rating": p_row["rating"],
@@ -350,11 +352,11 @@ if __name__ == "__main__":
     for cat in list_categories():
         print(f" - {cat['name']}: {cat['product_count']} items")
 
-    print("\n=== Search Demo: 'running shoes' ===")
-    search_res = search_products(query="running shoes", color="black")
+    print("\n=== Search Demo: 'shirt' in 'Women's Clothing' ===")
+    search_res = search_products(query="shirt", category="Women's Clothing")
     print(f"Found {len(search_res)} matching items:")
     for prod in search_res[:3]:
-        print(f" -> {prod['title']} | ${prod['base_price']} | Rating: {prod['rating']} | Colors: {prod['available_colors']}")
+        print(f" -> {prod['title']} | ₹{prod['base_price']} | Category: {prod['category_tree']}")
 
     print("\n=== Add to Cart Demo ===")
     if search_res and search_res[0]["variants"]:
@@ -362,4 +364,4 @@ if __name__ == "__main__":
         add_res = cart_add("test_session_1", v_id, 2)
         print("Add Result:", add_res)
         cart_info = cart_get("test_session_1")
-        print("Cart Contents:", json.dumps(cart_info, indent=2))
+        print("Cart Items count:", cart_info["total_items_count"])
