@@ -130,9 +130,8 @@ def init_user_db():
     conn.commit()
     conn.close()
 
-# ==========================================
+
 # User & Address Operations
-# ==========================================
 
 def get_user_by_id(user_id: int):
     """Retrieve user details and active spending limits."""
@@ -160,9 +159,8 @@ def get_user_default_address(user_id: int):
     conn.close()
     return dict(row) if row else None
 
-# ==========================================
+
 # Guardrails & Spend Limit Verification
-# ==========================================
 
 def verify_agent_spend_permission(user_id: int, transaction_amount: float) -> dict:
     """
@@ -171,25 +169,26 @@ def verify_agent_spend_permission(user_id: int, transaction_amount: float) -> di
     """
     user = get_user_by_id(user_id)
     if not user:
-        return {"allowed": False, "reason": "User not found"}
+        return {"allowed": False, "reason": "User not found", "spend_limit": 0.0}
 
     tx_limit = user["spend_limit_per_tx"]
     if transaction_amount > tx_limit:
         return {
             "allowed": False,
             "requires_explicit_confirmation": True,
+            "spend_limit": tx_limit,
             "reason": f"Amount (₹{transaction_amount:.2f}) exceeds agent transaction ceiling of ₹{tx_limit:.2f}."
         }
 
     return {
         "allowed": True,
         "requires_explicit_confirmation": False,
-        "reason": f"Amount is within pre-authorized limit of ₹{tx_limit:.2f}."
+        "spend_limit": tx_limit,
+        "reason": f"Amount is within pre-authorized limit of ₹{tx_limit:.2f}.",
     }
 
-# ==========================================
+
 # Order Lifecycle (Connecting Cart to Order)
-# ==========================================
 
 def create_order_from_cart(user_id: int, session_id: str, cart_data: dict, shipping_address_id: int | None = None) -> dict:
     """
@@ -273,9 +272,8 @@ def finalize_order_payment(order_id: int, payment_id: str, signature: str, statu
     conn.commit()
     conn.close()
 
-# ==========================================
+
 # Audit Logging (The Bar Requirement)
-# ==========================================
 
 def log_agent_audit(session_id: str, action_type: str, reasoning: str, payload: dict, user_id: int | None = None, is_gated: bool = False, user_confirmed: bool = False):
     """
