@@ -31,7 +31,7 @@ load_dotenv(Path(__file__).resolve().parent / ".env")
 
 import databases.inventory_service as inventory_service
 import databases.user_service as user_service
-from chat_agent.razorpay_client import create_payment_link
+from chat_agent.razorpay_client import create_payment_link, execute_mandate_charge
 from chat_agent.agent_tools import (
     search_catalog,
     get_product_info,
@@ -53,32 +53,62 @@ class AgentState(TypedDict):
     # "none" |   "link_sent" | "paid" | "failed"
 
 
-SYSTEM_PROMPT = """You are FlowCart, a friendly and efficient AI shopping assistant 
-embedded inside a conversational checkout experience.
-## Your Capabilities
-You can search products, manage carts, look up user profiles and addresses,
-check order history, and initiate secure checkouts — all via your tools.
+SYSTEM_PROMPT = """You are FlowCart, a high-IQ conversational shopping assistant and technical commerce advisor.
+You help users discover products, compare technical specifications, manage carts, and checkout seamlessly.
+
+## Your Core Capabilities
+1. **Intelligent Technical Recommender**:
+   When users ask for recommendations, comparisons, or products matching specific criteria (e.g., "phone with big battery under 40k", "gaming laptop under 80k with good GPU", "ANC earbuds", "marathon running shoes"):
+   - Call `search_catalog` using smart parameters (use category, max_price, and short focused keywords like "phone", "gaming", "battery", "RTX", "ANC", "running" — NEVER pass entire long questions as the query string).
+   - Carefully inspect the technical specifications in product descriptions (Battery mAh, CPU/GPU, TGP wattage, RAM, display, charging speed, shoe midsole/plate, fabric).
+   - Rank the top 3 to 5 options based on their specs and relevance.
+   - Present a clear comparison table or structured ranked list showing:
+     * **Rank & Product Name** (with formatted price, e.g. ₹39,999)
+     * **Key Relevant Specs** (e.g. "5,500 mAh battery, 100W SuperVOOC")
+     * **Score / Rating** (e.g. "Battery Score: 9.4/10" or "Performance: 9.2/10")
+     * **Why Recommended** (a 1-sentence technical justification)
+
+2. **Cart & Conversational Checkout**:
+   - Help users add variants (color, size/storage) to their cart.
+   - Maintain the cart (view, remove, clear).
+   - Before checkout:
+     a. Always call `view_cart` to summarize items and grand total.
+     b. Always call `get_delivery_address` to confirm shipping destination.
+     c. Ask for explicit confirmation ("Shall I proceed with checkout?") and wait for the user's "yes".
+
+3. **Proactive Upsell & Cross-Sell (IMPORTANT)**:
+   Immediately after a successful `add_to_cart`, you MUST suggest 2 complementary accessories by doing the following:
+   a. Look at what was just added. Identify the category and key use-case.
+   b. Call `search_catalog` ONCE with a short keyword and matching category to find accessories:
+      - Smartphone added → search "charger earbuds" in "Electronics & Gadgets" (max_price=10000)
+      - Gaming Laptop added → search "mouse keyboard SSD" in "Electronics & Gadgets" (max_price=15000)
+      - Running Shoes added → search "dry fit running" in "Clothing" (max_price=3000)
+      - Clothing/Apparel added → search "running shoes" in "Footwear" (max_price=15000)
+      - Earbuds/Headphones added → no upsell needed, skip.
+   c. Pick the top 2 most relevant results from the search.
+   d. Write your cart-confirmation message naturally, then append EXACTLY this block at the very end:
+
+   __UPSELL__{"items":[{"product_id":X,"variant_id":Y,"title":"Product Name","price":ZZZZ,"reason":"One-line why this pairs well"},...]}__UPSELL__
+
+   - `variant_id` MUST be a real variant ID from the search results (use the first variant's id).
+   - `price` MUST be the numeric variant price (no currency symbol).
+   - Include EXACTLY 2 items in the array. No more, no less.
+   - If search returns fewer than 2 results, include only what is available.
+   - If NOTHING relevant is found, omit the __UPSELL__ block entirely.
+
 ## Rules You Must NEVER Break
-1. NEVER fabricate product names, prices, variant IDs, or stock info.
-   Always call search_catalog or get_product_info first.
-2. NEVER call initiate_checkout speculatively.
-   Only call it after the user has EXPLICITLY confirmed they want to pay.
-3. ALWAYS pass the correct session_id and user_id to every tool you call.
-   These are provided in the conversation context below.
-4. Before checkout, always:
-   a. Call view_cart to show the full order summary.
-   b. Call get_delivery_address to confirm the shipping address.
-   c. Ask the user "Shall I proceed to checkout?" and wait for a yes.
+1. NEVER fabricate product names, prices, variant IDs, or stock info. Always call `search_catalog` or `get_product_info`.
+2. Keep search queries short and clean: use `category`, `max_price`, `min_price` filters whenever applicable. If a specific keyword returns 0 results, retry with a broader query or browse the category.
+3. NEVER call `initiate_checkout` speculatively. Only call it when the user explicitly agrees to place the order.
+4. ALWAYS pass the correct `session_id` and `user_id` provided in the session context.
+5. Format prices as ₹X,XXX (e.g. ₹39,999).
+6. The __UPSELL__ block must be valid JSON. Never break the format.
+
 ## Tone & Style
-- Be concise and conversational. Avoid bullet-point walls.
-- Format prices as ₹X,XXX (e.g. ₹1,849).
-- On payment link: present it clearly with the total amount.
-- On spend limit block: be empathetic, tell the limit, suggest removing items.
-- On out-of-stock: offer to find alternatives immediately.
-- On payment failure: offer to generate a fresh payment link.
-## Session Context
-Your session_id and user_id are injected into every message. Use them as-is.
-Start the conversation by greeting the user by name using get_user_profile.
+- Professional, knowledgeable, and concise.
+- Act like an expert product specialist who genuinely understands hardware and specs.
+- On spend limit or category blocks: explain the situation transparently and present the manual payment link.
+- On out-of-stock: proactively suggest the closest alternative.
 """
 
 
@@ -123,46 +153,97 @@ def build_agent_node(llm_with_tools):
 tool_node=ToolNode(SAFE_TOOLS)
 
 # node 3: payment gate node
-def payment_gate_node(state: AgentState)-> dict:
+def payment_gate_node(state: AgentState) -> dict:
     """
-    Intercepts initiate_checkout tool calls.
-    1. Gets cart total.
-    2. Verifies against user spend limit.
-    3. Logs audit entry (is_gated=True).
-    4. Returns updated state — gate_decision() will route from here.
-    """
+    Intercepts initiate_checkout tool calls and decides the payment path.
 
+    Routing priority:
+      1. Mandate auto-debit  — verify_mandate_for_payment() passes all 3 guardrails
+      2. Payment link        — mandate fails but spend_limit check passes (fallback)
+      3. Blocked             — spend limit exceeded; rejection synthesised here
+
+    The ToolMessage returned on the approved paths carries a `payment_method`
+    key that payment_tools_node reads to choose the right execution path.
+    """
     session_id = state["session_id"]
     user_id    = state["user_id"]
 
-    # find the initiate_checkout tool_call_id from the last AI message
-    last_ai_message=state['messages'][-1]
-    checkout_call=next(
-        (tc for tc in last_ai_message.tool_calls if tc['name']=='initiate_checkout'),
+    # Find the initiate_checkout tool_call_id from the last AI message
+    last_ai_message = state["messages"][-1]
+    checkout_call = next(
+        (tc for tc in last_ai_message.tool_calls if tc["name"] == "initiate_checkout"),
         None,
     )
-    tool_call_id=checkout_call['id'] if checkout_call else "unknown"
+    tool_call_id = checkout_call["id"] if checkout_call else "unknown"
 
-    # 1. get cart total
-    cart=inventory_service.cart_get(session_id)
-    grand_total=cart.get('grand_total',0.0)
-    item_count=cart.get('total_items_count',0)
+    # Fetch cart once — shared by both checks
+    cart        = inventory_service.cart_get(session_id)
+    grand_total = float(cart.get("grand_total", 0.0))
+    item_count  = int(cart.get("total_items_count", 0))
 
-    # 2. verify spend permission
-    check=user_service.verify_agent_spend_permission(user_id,grand_total)
-    allowed=check.get('allowed',False)
-    reason=check.get('reason',"")
+    # ── Priority 1: Mandate guardrail check ─────────────────────────────────
+    mandate_check = user_service.verify_mandate_for_payment(user_id, cart)
 
-    # 3. Audit log (is_gated=True marks this is a trust & safety checkpoint)
+    if mandate_check.get("allowed"):
+        mandate = mandate_check["mandate"]
+        reason  = mandate_check["reason"]
+
+        user_service.log_agent_audit(
+            session_id=session_id,
+            action_type="PAYMENT_GATE_CHECK",
+            reasoning=reason,
+            payload={
+                "cart_total":     grand_total,
+                "item_count":     item_count,
+                "allowed":        True,
+                "payment_method": "mandate_auto_debit",
+                "mandate_type":   mandate.get("mandate_type"),
+                "mandate_id":     mandate.get("id"),
+            },
+            user_id=user_id,
+            is_gated=True,
+            user_confirmed=True,
+        )
+
+        gate_msg = ToolMessage(
+            content=json.dumps({
+                "gate":           "approved",
+                "payment_method": "mandate_auto_debit",
+                "grand_total":    grand_total,
+                "reason":         reason,
+                "mandate": {
+                    "id":                   mandate["id"],
+                    "mandate_type":         mandate["mandate_type"],
+                    "mandate_token":        mandate["mandate_token"],
+                    "razorpay_customer_id": mandate.get("razorpay_customer_id"),
+                    "razorpay_token_id":    mandate.get("razorpay_token_id"),
+                    "max_amount_per_tx":    mandate["max_amount_per_tx"],
+                    "allowed_categories":   mandate.get("allowed_categories", []),
+                },
+            }),
+            tool_call_id=tool_call_id,
+            name="initiate_checkout",
+        )
+        return {"messages": [gate_msg]}
+
+    # ── Priority 2: Fallback — standard spend limit check ───────────────────
+    # Mandate failed (no mandate, over limit, or bad category) — try payment link path.
+    fallback_reason = mandate_check.get("reason", "")
+    check   = user_service.verify_agent_spend_permission(user_id, grand_total)
+    allowed = check.get("allowed", False)
+    reason  = check.get("reason", "")
+
     user_service.log_agent_audit(
         session_id=session_id,
-        action_type='PAYMENT_GATE_CHECK',
-        reasoning=reason,
+        action_type="PAYMENT_GATE_CHECK",
+        reasoning=f"Mandate path unavailable ({fallback_reason}). Spend-limit check: {reason}",
         payload={
-            'cart_total': grand_total,
-            'item_count': item_count,
-            'allowed': allowed,
-            'spend_limit': check.get("spend_limit"),
+            "cart_total":        grand_total,
+            "item_count":        item_count,
+            "allowed":           allowed,
+            "spend_limit":       check.get("spend_limit"),
+            "mandate_blocked_reason": fallback_reason,
+            "payment_method":    "link" if allowed else "blocked",
         },
         user_id=user_id,
         is_gated=True,
@@ -170,128 +251,199 @@ def payment_gate_node(state: AgentState)-> dict:
     )
 
     if allowed:
-        # Approved: return a ToolMessage so gate_decision can route to payment_tools.
         gate_msg = ToolMessage(
             content=json.dumps({
-                "gate": "approved",
-                "grand_total": grand_total,
-                "reason": reason,
+                "gate":           "approved",
+                "payment_method": "link",
+                "grand_total":    grand_total,
+                "reason":         reason,
+                "mandate_note":   fallback_reason,
             }),
             tool_call_id=tool_call_id,
             name="initiate_checkout",
         )
         return {"messages": [gate_msg]}
 
-    else:
-        # Blocked: synthesise the rejection response directly here.
-        # We return BOTH a ToolMessage (to close the open tool call in history)
-        # and an AIMessage (the actual user-facing reply).
-        # gate_decision will then route to END — no LLM call needed.
-        # This avoids the Gemini "model prefilling" error that occurs when the
-        # LLM is invoked with an AIMessage as the final message in history.
-        spend_limit = check.get("spend_limit", 0.0) or 0.0
+    # ── Priority 3: Blocked — spend limit exceeded ───────────────────────────
+    spend_limit = float(check.get("spend_limit", 0.0) or 0.0)
 
-        gate_msg = ToolMessage(
-            content=json.dumps({
-                "gate": "blocked",
-                "reason": reason,
-                "grand_total": grand_total,
-                "spend_limit": spend_limit,
-            }),
-            tool_call_id=tool_call_id,
-            name="initiate_checkout",
-        )
+    gate_msg = ToolMessage(
+        content=json.dumps({
+            "gate":        "blocked",
+            "reason":      reason,
+            "grand_total": grand_total,
+            "spend_limit": spend_limit,
+        }),
+        tool_call_id=tool_call_id,
+        name="initiate_checkout",
+    )
 
-        rejection_msg = AIMessage(content=(
-            f"I can't proceed with checkout right now.\n\n"
-            f"Your cart total of **₹{grand_total:,.2f}** exceeds your "
-            f"per-transaction agent spend limit of **₹{spend_limit:,.2f}**.\n\n"
-            f"Here's what you can do:\n"
-            f"- Remove some items from your cart to bring the total under the limit, or\n"
-            f"- Contact support to request a higher spend limit.\n\n"
-            f"Would you like me to show what's in your cart so you can decide what to remove?"
-        ))
-
-        return {"messages": [gate_msg, rejection_msg]}
+    rejection_msg = AIMessage(content=(
+        f"I can't proceed with checkout right now.\n\n"
+        f"Your cart total of **₹{grand_total:,.2f}** exceeds your "
+        f"per-transaction agent spend limit of **₹{spend_limit:,.2f}**.\n\n"
+        f"Here's what you can do:\n"
+        f"- Remove some items from your cart to bring the total under the limit, or\n"
+        f"- Contact support to request a higher spend limit.\n\n"
+        f"Would you like me to show what's in your cart so you can decide what to remove?"
+    ))
+    return {"messages": [gate_msg, rejection_msg]}
 
 # node 4: payment tools node
-def payment_tools_node(state: AgentState)-> dict:
+def payment_tools_node(state: AgentState) -> dict:
     """
     Runs only after payment_gate approves.
-    1. Fetches user profile + address.
-    2. Creates order record in users.db.
-    3. Generates Razorpay payment link.
-    4. Binds link to order.
-    5. Returns AIMessage with payment URL.
+
+    Dual-path execution based on payment_method from the gate ToolMessage:
+
+    PATH A — mandate_auto_debit:
+        1. Fetch user + cart + address.
+        2. Create internal order record.
+        3. Call execute_mandate_charge() → creates real Razorpay Order + attempts recurring charge.
+        4. Call execute_mandate_payment() → records debit in DB + audit log.
+        5. Clear cart. Return zero-click success AIMessage.
+
+    PATH B — link (fallback):
+        1–2. Same as above.
+        3. Call create_payment_link() → returns Razorpay payment URL.
+        4. Bind link to order. Return AIMessage with the URL.
     """
     session_id = state["session_id"]
     user_id    = state["user_id"]
 
-    # 1. get user profile and cart
-    user=user_service.get_user_by_id(user_id) or {}
-    cart=inventory_service.cart_get(session_id)
-    address=user_service.get_user_default_address(user_id) or {}
+    # Parse gate ToolMessage to get payment_method
+    gate_msg_content = state["messages"][-1].content
+    try:
+        gate_data = json.loads(gate_msg_content if isinstance(gate_msg_content, str)
+                               else json.dumps(gate_msg_content))
+    except (json.JSONDecodeError, TypeError):
+        gate_data = {}
+
+    payment_method = gate_data.get("payment_method", "link")
+
+    # ── Common setup ─────────────────────────────────────────────────────────
+    user    = user_service.get_user_by_id(user_id) or {}
+    cart    = inventory_service.cart_get(session_id)
+    address = user_service.get_user_default_address(user_id) or {}
 
     grand_total: float = float(cart.get("grand_total") or 0.0)
 
-    # 2. create order
+    phone = user.get("phone", "+910000000000")
+    if not phone.startswith("+"):
+        phone = "+91" + phone.lstrip("0")
+
+    # Create the internal order record (same for both paths)
     order = user_service.create_order_from_cart(
         session_id=session_id,
         user_id=user_id,
         cart_data=cart,
-        shipping_address_id=address.get("id")
+        shipping_address_id=address.get("id"),
     )
 
-    # Guard: if order creation failed, abort early
     if not order.get("success"):
         error_msg = order.get("error", "Failed to create order.")
         return {
-            "messages": [AIMessage(content=f"Couldn't create your order: {error_msg}")],
+            "messages":       [AIMessage(content=f"Couldn't create your order: {error_msg}")],
             "payment_status": "failed",
-    }
+        }
 
-    order_id= int(order["order_id"]) 
-    order_number= str(order.get("order_number",f"ORD-{uuid.uuid4().hex[:8].upper()}"))
+    order_id     = int(order["order_id"])
+    order_number = str(order.get("order_number", f"ORD-{uuid.uuid4().hex[:8].upper()}"))
 
-    # 3. generate razorpay payment link
-    phone=user.get("phone","+910000000000")
-    if not phone.startswith("+"):
-        phone="+91"+phone.lstrip("0")
+    # ── PATH A: Mandate Auto-Debit ────────────────────────────────────────────
+    if payment_method == "mandate_auto_debit":
+        mandate = gate_data.get("mandate", {})
 
-    link_result=create_payment_link(
+        # Step A+B: Create real Razorpay Order + attempt recurring charge
+        charge = execute_mandate_charge(
+            amount_inr=grand_total,
+            order_number=order_number,
+            customer_id=mandate.get("razorpay_customer_id", ""),
+            token_id=mandate.get("razorpay_token_id", ""),
+            email=user.get("email", ""),
+            phone=phone,
+        )
+
+        if not charge.get("success"):
+            # Razorpay Order creation itself failed — fall through to link
+            user_service.log_agent_audit(
+                session_id=session_id,
+                action_type="MANDATE_CHARGE_FAILED",
+                reasoning=charge.get("error", "Razorpay order creation failed."),
+                payload={"order_id": order_id, "order_number": order_number},
+                user_id=user_id,
+                is_gated=True,
+                user_confirmed=False,
+            )
+            payment_method = "link"   # fall through below
+
+        else:
+            # Record the debit in DB (Phase 1 function) and clear cart
+            user_service.execute_mandate_payment(
+                user_id=user_id,
+                order_id=order_id,
+                amount=grand_total,
+                mandate_id=mandate.get("id"),
+                session_id=session_id,
+                razorpay_order_id=charge.get("razorpay_order_id"),
+                real_payment_id=charge.get("payment_id"),   # None → fn generates UUID
+            )
+            inventory_service.cart_clear(session_id)
+
+            masked_token = mandate.get("mandate_token", "")[-4:] or "????"
+            rzp_order_id = charge.get("razorpay_order_id", "N/A")
+            api_ok       = charge.get("api_charge_succeeded", False)
+
+            reply = AIMessage(content=(
+                f"✅ **Payment Complete — No action needed!**\n\n"
+                f"**Order:** {order_number}\n"
+                f"**Amount:** ₹{grand_total:,.2f}\n"
+                f"**Paid via:** Pre-authorized {mandate.get('mandate_type', 'UPI_AUTOPAY')} "
+                f"mandate (···{masked_token})\n"
+                f"**Razorpay Order:** `{rzp_order_id}`\n"
+                f"**Delivering to:** {address.get('street_address', '')}, "
+                f"{address.get('city', '')}\n\n"
+                + (
+                    "_Your UPI Autopay mandate was charged automatically._"
+                    if api_ok else
+                    "_Mandate charge recorded. In production, your UPI Autopay mandate "
+                    "would be debited automatically at this step._"
+                )
+            ))
+            return {"messages": [reply], "payment_status": "paid"}
+
+    # ── PATH B: Razorpay Payment Link (original flow, unchanged) ─────────────
+    link_result = create_payment_link(
         amount_inr=grand_total,
         description=f"FlowCart Order {order_number}",
-        customer_name=user.get("full_name", "Customer"),
+        customer_name=user.get("name", "Customer"),
         customer_email=user.get("email", ""),
         customer_phone=phone,
         order_number=order_number,
     )
 
-    # 4. bind payment to order and audit 
     if link_result.get("success"):
-        payment_link_id=link_result['payment_link_id']
-        short_url=link_result['short_url']
+        payment_link_id = link_result["payment_link_id"]
+        short_url       = link_result["short_url"]
 
-        # update order with razorpay link id
         user_service.link_razorpay_payment(
-            order_id=order_id,                        
+            order_id=order_id,
             payment_link_id=payment_link_id,
             razorpay_order_id=None,
         )
 
-        # 5. return the payment link message to the agent 
-        reply=AIMessage(content=(
+        reply = AIMessage(content=(
             f"Your order **{order_number}** is confirmed!\n\n"
             f"**Order Total:** ₹{grand_total:,.2f}\n"
             f"**Delivering to:** {address.get('street_address', '')}, "
             f"{address.get('city', '')}\n\n"
             f"**Complete your payment here:**\n{short_url}\n\n"
-            f"The link is valid for 24 hours. You'll get a confirmation SMS and email once paid."
+            f"The link is valid for 24 hours. "
+            f"You'll get a confirmation SMS and email once paid."
         ))
 
     else:
-        # payment link creation failed
-        error=link_result.get("error","unknown error")
+        error = link_result.get("error", "unknown error")
 
         user_service.log_agent_audit(
             session_id=session_id,
@@ -308,10 +460,12 @@ def payment_tools_node(state: AgentState)-> dict:
             f"the payment link: _{error}_\n\n"
             f"Please try again or contact support."
         ))
+
     return {
         "messages":       [reply],
         "payment_status": "link_sent" if link_result.get("success") else "failed",
     }
+
 
 
 # Routing Functions 
