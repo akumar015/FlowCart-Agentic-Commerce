@@ -3,6 +3,7 @@ langchain
 langchain-community
 langchain-core
 langchain-google-genai
+langchain-openai
 langchain-groq
 python-dotenv
 uvicorn

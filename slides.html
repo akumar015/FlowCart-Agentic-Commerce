@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlowCart — Technical Architecture & Pitch Deck</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap');
+    
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #080C15;
+      color: #F8FAFC;
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    .slide {
+      display: none;
+      width: 100%;
+      height: 100%;
+      animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .slide.active {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .glass-panel {
+      background: rgba(18, 24, 40, 0.85);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
+    }
+
+    .glow-purple {
+      box-shadow: 0 0 40px -10px rgba(139, 92, 246, 0.25);
+    }
+
+    .glow-indigo {
+      box-shadow: 0 0 40px -10px rgba(99, 102, 241, 0.25);
+    }
+
+    .glow-emerald {
+      box-shadow: 0 0 40px -10px rgba(16, 185, 129, 0.25);
+    }
+  </style>
+</head>
+<body class="flex flex-col justify-between selection:bg-indigo-500 selection:text-white">
+
+  <!-- Ambient Glow Effects -->
+  <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
+    <div class="absolute -top-40 left-1/4 w-[600px] h-[350px] bg-indigo-600/15 rounded-full blur-[140px]"></div>
+    <div class="absolute -bottom-40 right-1/4 w-[600px] h-[350px] bg-violet-600/15 rounded-full blur-[140px]"></div>
+  </div>
+
+  <!-- Top Navigation Bar -->
+  <header class="h-16 border-b border-slate-800/80 px-8 flex items-center justify-between z-20 bg-[#080C15]/90 backdrop-blur-md shrink-0">
+    <div class="flex items-center space-x-3">
+      <span class="font-extrabold text-xl tracking-tight text-white">FlowCart</span>
+      <span class="text-slate-600 font-light">|</span>
+      <span class="text-xs font-mono text-indigo-400 font-semibold tracking-wider uppercase">Technical Architecture & Pitch Deck</span>
+    </div>
+    <div class="flex items-center space-x-4">
+      <div id="slideCounter" class="text-xs font-mono font-semibold text-slate-300 bg-slate-900 border border-slate-700/80 px-3.5 py-1.5 rounded-full">
+        1 / 6
+      </div>
+      <button onclick="toggleFullScreen()" class="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 text-xs font-medium flex items-center space-x-1.5 transition-colors">
+        <span>⛶</span>
+        <span>Fullscreen</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Presentation Stage (Locked to Clean 16:9 Max Width) -->
+  <main class="flex-1 w-full max-w-7xl mx-auto px-6 py-4 relative z-10 flex items-center justify-center overflow-hidden">
+    
+    <!-- ================================================================= -->
+    <!-- SLIDE 1: Title -->
+    <!-- ================================================================= -->
+    <div class="slide active">
+      <div class="w-full flex flex-col items-center text-center space-y-6 max-w-4xl mx-auto">
+        <div class="inline-flex items-center space-x-2 px-4 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs font-semibold">
+          <span class="w-2 h-2 rounded-full bg-indigo-400 animate-pulse"></span>
+          <span>Agentic Commerce Platform • Technical Showcase</span>
+        </div>
+
+        <h1 class="text-6xl md:text-7xl font-extrabold tracking-tight text-white leading-tight">
+          FlowCart
+        </h1>
+
+        <p class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-indigo-400 via-violet-400 to-purple-300 bg-clip-text text-transparent">
+          High-IQ Autonomous Conversational In-App Checkout
+        </p>
+
+        <p class="text-slate-400 max-w-2xl text-base md:text-lg leading-relaxed">
+          Crossing the e-commerce <strong class="text-slate-200">"Transactional Divide"</strong> by transforming conversational AI from an unconvincing sales rep into a trusted, bounded, and explainable cashier.
+        </p>
+
+        <div class="flex flex-wrap justify-center gap-2.5 pt-4">
+          <span class="px-3 py-1.5 rounded-lg bg-slate-900/90 border border-slate-800 text-xs font-mono text-indigo-300 font-semibold">LangGraph Dual-Zone</span>
+          <span class="px-3 py-1.5 rounded-lg bg-slate-900/90 border border-slate-800 text-xs font-mono text-emerald-300 font-semibold">UPI Autopay Mandates</span>
+          <span class="px-3 py-1.5 rounded-lg bg-slate-900/90 border border-slate-800 text-xs font-mono text-violet-300 font-semibold">FastMCP Standard</span>
+          <span class="px-3 py-1.5 rounded-lg bg-slate-900/90 border border-slate-800 text-xs font-mono text-amber-300 font-semibold">Google Gemini 3.5</span>
+          <span class="px-3 py-1.5 rounded-lg bg-slate-900/90 border border-slate-800 text-xs font-mono text-cyan-300 font-semibold">React 19 + FastAPI</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- SLIDE 2: The Problem -->
+    <!-- ================================================================= -->
+    <div class="slide">
+      <div class="w-full space-y-6">
+        <div class="border-b border-slate-800/80 pb-4">
+          <span class="text-xs font-mono uppercase tracking-widest text-indigo-400 font-bold">The E-Commerce Paradox</span>
+          <h2 class="text-3xl md:text-4xl font-extrabold text-white mt-1">The "Transactional Divide" in Modern Commerce</h2>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
+          <!-- Status Quo Card -->
+          <div class="glass-panel rounded-2xl p-7 border-rose-500/20 space-y-4">
+            <div class="flex items-center space-x-2.5 text-rose-400 font-bold text-lg">
+              <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+              <span>Status Quo: The Fragmented Funnel</span>
+            </div>
+            <p class="text-slate-400 text-sm leading-relaxed">
+              AI acts as the sales representative, but is strictly locked out from being the cashier.
+            </p>
+            <div class="space-y-3.5 pt-1 text-sm text-slate-300">
+              <div class="flex items-start space-x-3 bg-slate-900/50 p-3 rounded-xl border border-slate-800/60">
+                <span class="text-rose-400 font-bold shrink-0">✕</span>
+                <p><strong>Ejected at Cart:</strong> The instant the customer agrees to purchase, the chat stops and redirects to forms.</p>
+              </div>
+              <div class="flex items-start space-x-3 bg-slate-900/50 p-3 rounded-xl border border-slate-800/60">
+                <span class="text-rose-400 font-bold shrink-0">✕</span>
+                <p><strong>Multi-Step Friction:</strong> Selecting addresses, entering card numbers, and waiting for SMS OTPs causes severe drop-offs.</p>
+              </div>
+              <div class="flex items-start space-x-3 bg-slate-900/50 p-3 rounded-xl border border-slate-800/60">
+                <span class="text-rose-400 font-bold shrink-0">✕</span>
+                <p><strong>The Trust Deficit:</strong> Unrestricted LLMs hallucinate or miscalculate totals—platforms can't risk prompt-injection chargebacks.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- FlowCart Solution Card -->
+          <div class="glass-panel rounded-2xl p-7 border-indigo-500/40 glow-indigo space-y-4">
+            <div class="flex items-center space-x-2.5 text-emerald-400 font-bold text-lg">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+              <span>FlowCart: True Agentic Commerce</span>
+            </div>
+            <p class="text-slate-400 text-sm leading-relaxed">
+              In-app conversational checkout governed by deterministic, tamper-proof guardrails.
+            </p>
+            <div class="space-y-3.5 pt-1 text-sm text-slate-300">
+              <div class="flex items-start space-x-3 bg-slate-900/50 p-3 rounded-xl border border-slate-800/60">
+                <span class="text-emerald-400 font-bold shrink-0">✔</span>
+                <p><strong>Zero-Redirect In-App Flow:</strong> Spec comparison, real-time cart mutations, and checkout completion stay in chat.</p>
+              </div>
+              <div class="flex items-start space-x-3 bg-slate-900/50 p-3 rounded-xl border border-slate-800/60">
+                <span class="text-emerald-400 font-bold shrink-0">✔</span>
+                <p><strong>Pre-Authorized Mandates:</strong> Zero-click autonomous auto-debit via UPI Autopay for everyday purchases under ₹4,000.</p>
+              </div>
+              <div class="flex items-start space-x-3 bg-slate-900/50 p-3 rounded-xl border border-slate-800/60">
+                <span class="text-emerald-400 font-bold shrink-0">✔</span>
+                <p><strong>Deterministic Safety Gate:</strong> A hardcoded state machine node verifies spending limits and category whitelists before payment.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- SLIDE 3: System Architecture -->
+    <!-- ================================================================= -->
+    <div class="slide">
+      <div class="w-full space-y-6">
+        <div class="border-b border-slate-800/80 pb-4">
+          <span class="text-xs font-mono uppercase tracking-widest text-indigo-400 font-bold">System Topology</span>
+          <h2 class="text-3xl md:text-4xl font-extrabold text-white mt-1">End-to-End System Architecture</h2>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 w-full">
+          <!-- Column 1 -->
+          <div class="glass-panel rounded-2xl p-5 space-y-3 border-slate-800 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-[11px] font-mono font-bold text-indigo-400 uppercase tracking-wider">01. Interaction</span>
+                <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+              </div>
+              <h3 class="text-lg font-bold text-white mb-2">Clients</h3>
+              <p class="text-xs text-slate-400 mb-3 leading-relaxed">Modern multi-client entrypoints</p>
+              <ul class="text-xs text-slate-300 space-y-2 leading-relaxed">
+                <li>• <strong>React 19 + Vite:</strong> Dark glassmorphic shopping interface.</li>
+                <li>• <strong>Claude Desktop:</strong> Autonomous AI buyers via FastMCP stdio.</li>
+                <li>• <strong>Interactive Pills:</strong> 1-click upsells and technical prompt chips.</li>
+              </ul>
+            </div>
+            <div class="pt-3 border-t border-slate-800/80 text-[11px] font-mono text-indigo-300">
+              HTTP / JSON & stdio MCP
+            </div>
+          </div>
+
+          <!-- Column 2 -->
+          <div class="glass-panel rounded-2xl p-5 space-y-3 border-indigo-500/30 flex flex-col justify-between glow-indigo">
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-[11px] font-mono font-bold text-indigo-400 uppercase tracking-wider">02. Orchestration</span>
+                <span class="w-2 h-2 rounded-full bg-indigo-400"></span>
+              </div>
+              <h3 class="text-lg font-bold text-white mb-2">Backend Core</h3>
+              <p class="text-xs text-slate-400 mb-3 leading-relaxed">High-speed intelligence & state</p>
+              <ul class="text-xs text-slate-300 space-y-2 leading-relaxed">
+                <li>• <strong>FastAPI REST:</strong> High-throughput endpoints on port 8000.</li>
+                <li>• <strong>LangGraph Engine:</strong> Stateful graph with MemorySaver checkpointing.</li>
+                <li>• <strong>Gemini 3.5 Flash Lite:</strong> Low-latency reasoning & tool calls.</li>
+              </ul>
+            </div>
+            <div class="pt-3 border-t border-slate-800/80 text-[11px] font-mono text-indigo-300">
+              StateGraph & MemorySaver
+            </div>
+          </div>
+
+          <!-- Column 3 -->
+          <div class="glass-panel rounded-2xl p-5 space-y-3 border-slate-800 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-[11px] font-mono font-bold text-indigo-400 uppercase tracking-wider">03. Persistence</span>
+                <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+              </div>
+              <h3 class="text-lg font-bold text-white mb-2">Dual Databases</h3>
+              <p class="text-xs text-slate-400 mb-3 leading-relaxed">ACID SQLite with full search</p>
+              <ul class="text-xs text-slate-300 space-y-2 leading-relaxed">
+                <li>• <strong>inventory.db:</strong> Products, variants, carts & FTS5 search index.</li>
+                <li>• <strong>users.db:</strong> Profiles, addresses, and UPI Autopay mandates.</li>
+                <li>• <strong>agent_audit_logs:</strong> Immutable append-only audit trail.</li>
+              </ul>
+            </div>
+            <div class="pt-3 border-t border-slate-800/80 text-[11px] font-mono text-indigo-300">
+              SQLite3 + FTS5 Tables
+            </div>
+          </div>
+
+          <!-- Column 4 -->
+          <div class="glass-panel rounded-2xl p-5 space-y-3 border-emerald-500/30 flex flex-col justify-between glow-emerald">
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-[11px] font-mono font-bold text-emerald-400 uppercase tracking-wider">04. Execution</span>
+                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+              </div>
+              <h3 class="text-lg font-bold text-white mb-2">Payment Layer</h3>
+              <p class="text-xs text-slate-400 mb-3 leading-relaxed">Secure settlement gateway</p>
+              <ul class="text-xs text-slate-300 space-y-2 leading-relaxed">
+                <li>• <strong>Recurring API:</strong> Zero-click tokenized UPI mandate debit.</li>
+                <li>• <strong>Payment Links:</strong> Hosted 24-hr fallback for high-ticket items.</li>
+                <li>• <strong>HMAC-SHA256:</strong> Cryptographically verified webhook callbacks.</li>
+              </ul>
+            </div>
+            <div class="pt-3 border-t border-slate-800/80 text-[11px] font-mono text-emerald-300">
+              Razorpay API & Webhooks
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- SLIDE 4: Dual-Zone State Machine -->
+    <!-- ================================================================= -->
+    <div class="slide">
+      <div class="w-full space-y-6">
+        <div class="border-b border-slate-800/80 pb-4">
+          <span class="text-xs font-mono uppercase tracking-widest text-indigo-400 font-bold">Architectural Security</span>
+          <h2 class="text-3xl md:text-4xl font-extrabold text-white mt-1">The Brain: Dual-Zone LangGraph State Machine</h2>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
+          <!-- Safe Zone -->
+          <div class="glass-panel rounded-2xl p-7 border-indigo-500/30 space-y-4">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-mono font-bold text-indigo-400 uppercase tracking-wider">Safe Zone • ToolNode</span>
+              <span class="text-[11px] px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-mono font-semibold">Read & Cart Tools</span>
+            </div>
+            <h3 class="text-xl font-bold text-white">Unrestricted Catalog Discovery</h3>
+            <div class="space-y-3 pt-1 text-sm text-slate-300">
+              <div class="bg-slate-900/50 p-3 rounded-xl border border-slate-800/60">
+                <span class="font-mono text-indigo-300 font-semibold block text-xs">search_catalog & get_product_info</span>
+                <p class="text-slate-400 text-xs mt-0.5">Executes FTS5 keyword matching and parses battery mAh, GPU wattage, and display specs.</p>
+              </div>
+              <div class="bg-slate-900/50 p-3 rounded-xl border border-slate-800/60">
+                <span class="font-mono text-indigo-300 font-semibold block text-xs">add_to_cart / view_cart / remove_from_cart</span>
+                <p class="text-slate-400 text-xs mt-0.5">Mutates SQLite cart sessions in real time and calculates 8% estimated tax.</p>
+              </div>
+              <div class="bg-slate-900/50 p-3 rounded-xl border border-slate-800/60">
+                <span class="font-mono text-indigo-300 font-semibold block text-xs">Proactive Cross-Sell Engine</span>
+                <p class="text-slate-400 text-xs mt-0.5">Emits structured __UPSELL__ JSON blocks rendered as 1-click companion pills.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Danger Zone -->
+          <div class="glass-panel rounded-2xl p-7 border-amber-500/30 space-y-4 glow-purple">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-mono font-bold text-amber-400 uppercase tracking-wider">Danger Zone • Payment Gate</span>
+              <span class="text-[11px] px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono font-semibold">Deterministic Gate</span>
+            </div>
+            <h3 class="text-xl font-bold text-white">Deterministic Financial Interceptor</h3>
+            <div class="space-y-3 pt-1 text-sm text-slate-300">
+              <div class="bg-slate-900/50 p-3 rounded-xl border border-slate-800/60">
+                <span class="font-mono text-amber-300 font-semibold block text-xs">No Direct LLM Access</span>
+                <p class="text-slate-400 text-xs mt-0.5">The LLM cannot directly call Razorpay. initiate_checkout is intercepted at the graph level.</p>
+              </div>
+              <div class="bg-slate-900/50 p-3 rounded-xl border border-slate-800/60">
+                <span class="font-mono text-amber-300 font-semibold block text-xs">Strict Guardrail Evaluation</span>
+                <p class="text-slate-400 text-xs mt-0.5">Verifies mandate active status, per-tx amount ceiling, and user category whitelist.</p>
+              </div>
+              <div class="bg-slate-900/50 p-3 rounded-xl border border-slate-800/60">
+                <span class="font-mono text-amber-300 font-semibold block text-xs">Zero API Calls on Rejection</span>
+                <p class="text-slate-400 text-xs mt-0.5">Blocks over-limit attempts immediately, logging the rejection to agent_audit_logs.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- SLIDE 5: 3-Tier Financial Guardrails -->
+    <!-- ================================================================= -->
+    <div class="slide">
+      <div class="w-full space-y-6">
+        <div class="border-b border-slate-800/80 pb-4">
+          <span class="text-xs font-mono uppercase tracking-widest text-emerald-400 font-bold">Financial Decision Engine</span>
+          <h2 class="text-3xl md:text-4xl font-extrabold text-white mt-1">3-Tier Financial Guardrail Routing</h2>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-5 w-full">
+          <!-- Path A -->
+          <div class="glass-panel rounded-2xl p-6 border-emerald-500/40 glow-emerald space-y-3 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-mono font-bold text-emerald-400">PATH A (Priority 1)</span>
+                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+              </div>
+              <h3 class="text-lg font-bold text-white">Mandate Auto-Debit</h3>
+              <p class="text-xs text-slate-400 mb-3">Zero-Click Autonomous Settlement</p>
+              <div class="bg-slate-900/60 p-3.5 rounded-xl border border-slate-800/60 text-xs text-slate-300 space-y-2">
+                <p><strong>Trigger:</strong> Active Mandate + Cart &le; Mandate Cap (₹4,000) + Whitelisted Category.</p>
+                <p><strong>Action:</strong> Razorpay recurring order debited server-side via stored token.</p>
+                <p class="text-emerald-400 font-semibold pt-1">✔ Order confirmed in chat with zero redirects!</p>
+              </div>
+            </div>
+            <div class="text-[11px] font-mono text-emerald-300/80 pt-2 border-t border-slate-800">
+              Sub-3 Second Execution
+            </div>
+          </div>
+
+          <!-- Path B -->
+          <div class="glass-panel rounded-2xl p-6 border-indigo-500/40 glow-indigo space-y-3 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-mono font-bold text-indigo-400">PATH B (Priority 2)</span>
+                <span class="w-2 h-2 rounded-full bg-indigo-400"></span>
+              </div>
+              <h3 class="text-lg font-bold text-white">Payment Link Fallback</h3>
+              <p class="text-xs text-slate-400 mb-3">Step-Up Manual Verification</p>
+              <div class="bg-slate-900/60 p-3.5 rounded-xl border border-slate-800/60 text-xs text-slate-300 space-y-2">
+                <p><strong>Trigger:</strong> Cart exceeds mandate cap OR contains non-whitelisted items (e.g. ₹70k iPhone).</p>
+                <p><strong>Action:</strong> Generates secure hosted Razorpay link (valid 24h).</p>
+                <p class="text-indigo-400 font-semibold pt-1">✔ SMS & email dispatched; webhook confirms order.</p>
+              </div>
+            </div>
+            <div class="text-[11px] font-mono text-indigo-300/80 pt-2 border-t border-slate-800">
+              HMAC-SHA256 Settlement
+            </div>
+          </div>
+
+          <!-- Path C -->
+          <div class="glass-panel rounded-2xl p-6 border-amber-500/40 space-y-3 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs font-mono font-bold text-amber-400">PATH C (Priority 3)</span>
+                <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+              </div>
+              <h3 class="text-lg font-bold text-white">Hard Rejection</h3>
+              <p class="text-xs text-slate-400 mb-3">Zero-Movement Block</p>
+              <div class="bg-slate-900/60 p-3.5 rounded-xl border border-slate-800/60 text-xs text-slate-300 space-y-2">
+                <p><strong>Trigger:</strong> Cart grand total > User's per-tx credit limit.</p>
+                <p><strong>Action:</strong> Gate programmatically halts checkout intent.</p>
+                <p class="text-amber-400 font-semibold pt-1">✔ Zero external API calls; violation logged to audit trail.</p>
+              </div>
+            </div>
+            <div class="text-[11px] font-mono text-amber-300/80 pt-2 border-t border-slate-800">
+              Zero Unauthorized Charges
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- SLIDE 6: A2A Commerce & Impact -->
+    <!-- ================================================================= -->
+    <div class="slide">
+      <div class="w-full space-y-6">
+        <div class="border-b border-slate-800/80 pb-4">
+          <span class="text-xs font-mono uppercase tracking-widest text-violet-400 font-bold">The Future of Commerce</span>
+          <h2 class="text-3xl md:text-4xl font-extrabold text-white mt-1">Multi-Agent Commerce (FastMCP) & Core Impact</h2>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
+          <!-- FastMCP -->
+          <div class="glass-panel rounded-2xl p-7 border-violet-500/40 glow-purple space-y-4">
+            <span class="text-xs font-mono text-violet-400 font-bold uppercase tracking-wider">FastMCP Protocol Server</span>
+            <h3 class="text-xl font-bold text-white">Agent-to-Agent (A2A) Commerce</h3>
+            <div class="space-y-3 pt-1 text-sm text-slate-300">
+              <div class="bg-slate-900/50 p-3 rounded-xl border border-slate-800/60">
+                <span class="font-mono text-violet-300 font-semibold block text-xs">Standardized Open Protocol</span>
+                <p class="text-slate-400 text-xs mt-0.5">mcp_server.py exposes search_products, add_to_cart, and checkout_cart tools.</p>
+              </div>
+              <div class="bg-slate-900/50 p-3 rounded-xl border border-slate-800/60">
+                <span class="font-mono text-violet-300 font-semibold block text-xs">Claude Desktop Compatible</span>
+                <p class="text-slate-400 text-xs mt-0.5">External buyer agents connect over stdio to find inventory and maintain carts.</p>
+              </div>
+              <div class="bg-slate-900/50 p-3 rounded-xl border border-slate-800/60">
+                <span class="font-mono text-violet-300 font-semibold block text-xs">Autonomous Buying Authority</span>
+                <p class="text-slate-400 text-xs mt-0.5">Agents purchase approved items autonomously under their human owner's mandate.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Key Impact -->
+          <div class="glass-panel rounded-2xl p-7 border-emerald-500/40 glow-emerald space-y-4">
+            <span class="text-xs font-mono text-emerald-400 font-bold uppercase tracking-wider">Key Impact</span>
+            <h3 class="text-xl font-bold text-white">Why FlowCart Wins</h3>
+            <div class="space-y-3 pt-1 text-sm text-slate-300">
+              <div class="bg-slate-900/50 p-3 rounded-xl border border-slate-800/60">
+                <span class="font-mono text-emerald-300 font-semibold block text-xs">Zero Redirect Drop-offs</span>
+                <p class="text-slate-400 text-xs mt-0.5">Customers never leave conversational context from discovery to confirmed order.</p>
+              </div>
+              <div class="bg-slate-900/50 p-3 rounded-xl border border-slate-800/60">
+                <span class="font-mono text-emerald-300 font-semibold block text-xs">Sub-3 Second Settlement</span>
+                <p class="text-slate-400 text-xs mt-0.5">Pre-authorized UPI Autopay eliminates manual OTP, CVV, and form delays.</p>
+              </div>
+              <div class="bg-slate-900/50 p-3 rounded-xl border border-slate-800/60">
+                <span class="font-mono text-emerald-300 font-semibold block text-xs">100% Audit Transparency</span>
+                <p class="text-slate-400 text-xs mt-0.5">Every reasoning step, gate check, and API payload is recorded in agent_audit_logs.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Bottom Navigation Bar -->
+  <footer class="h-16 border-t border-slate-800/80 px-8 flex items-center justify-between z-20 bg-[#080C15]/90 backdrop-blur-md shrink-0">
+    <div class="text-xs text-slate-400 flex items-center space-x-2 font-medium">
+      <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+      <span>Use <kbd class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 font-mono text-[11px]">←</kbd> and <kbd class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 font-mono text-[11px]">→</kbd> Arrow keys or Spacebar to navigate</span>
+    </div>
+    <div class="flex items-center space-x-3">
+      <button onclick="prevSlide()" class="px-4 py-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 text-xs font-semibold transition-all">
+        ← Previous
+      </button>
+      <button onclick="nextSlide()" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-all shadow-md shadow-indigo-600/30">
+        Next →
+      </button>
+    </div>
+  </footer>
+
+  <script>
+    let currentSlide = 0;
+    const slides = document.querySelectorAll('.slide');
+    const counter = document.getElementById('slideCounter');
+
+    function updateSlide() {
+      slides.forEach((s, idx) => {
+        if (idx === currentSlide) {
+          s.classList.add('active');
+        } else {
+          s.classList.remove('active');
+        }
+      });
+      counter.textContent = (currentSlide + 1) + ' / ' + slides.length;
+    }
+
+    function nextSlide() {
+      if (currentSlide < slides.length - 1) {
+        currentSlide++;
+        updateSlide();
+      }
+    }
+
+    function prevSlide() {
+      if (currentSlide > 0) {
+        currentSlide--;
+        updateSlide();
+      }
+    }
+
+    function toggleFullScreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => console.log(err));
+      } else {
+        document.exitFullscreen().catch(err => console.log(err));
+      }
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        nextSlide();
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        prevSlide();
+      } else if (e.key === 'f' || e.key === 'F') {
+        toggleFullScreen();
+      }
+    });
+  </script>
+</body>
+</html>

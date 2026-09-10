@@ -13,9 +13,11 @@ import sys
 import uuid
 from pathlib import Path
 from typing import Annotated, Literal
+import os 
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 from langgraph.prebuilt import ToolNode
@@ -526,8 +528,10 @@ def build_graph():
     """
 
     # llm setup
-    llm=ChatGoogleGenerativeAI(
-        model='gemini-3.5-flash-lite',
+    llm=ChatOpenAI(
+        model='gpt-4o-mini',
+        base_url = "https://openrouter.ai/api/v1",
+        api_key = os.getenv("OPENROUTER_API_KEY"), # type:ignore
         temperature=0.2
     )
     llm_with_tools=llm.bind_tools(SAFE_TOOLS)
